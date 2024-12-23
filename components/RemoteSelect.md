@@ -1,4 +1,4 @@
-```TypeScript
+```tsx
 import React, {
   forwardRef,
   memo,
@@ -10,23 +10,14 @@ import React, {
   useState,
 } from 'react';
 import { message, Select, SelectProps } from 'antd';
-// @ts-ignore
 import { cloneDeep, debounce, get, isEqual, uniqBy } from 'lodash';
-// @ts-ignore
-import { request } from 'cn-lib';
 
-type Filter = [string, string, string];
-type Order = [string, 'desc' | 'asc'];
 type OmitSelectProps = 'options' | 'loading' | 'onSelect' | 'labelInValue';
 
 export interface SearchParams {
   pageNum?: number;
   pageSize?: number;
-  fuzzyKeyword?: string;
-  fuzzyFields?: string[];
-  filters?: Filter[];
-  orders?: Order[];
-  modelCode?: string;
+  [key: string]: any;
 }
 
 interface Res {
@@ -42,15 +33,15 @@ interface Response {
 }
 
 export interface RemoteSelectProps extends Omit<SelectProps, OmitSelectProps> {
-  /* 请求 */
-  api: (params?: SearchParams) => Promise<Response>;
-  /* 下拉初始值 */
+  /** 请求 */
+  api: (params: SearchParams) => Promise<Response>;
+  /** 下拉初始值 */
   defaultOptions?: SelectProps['options'];
-  /* 搜索参数 */
+  /** 搜索参数 */
   searchParams?: SearchParams;
-  /* value 字段 支持 xxx.xxx 嵌套类型 */
+  /** value 字段 支持 xxx.xxx 嵌套类型 */
   valueField?: string;
-  /* label 字段 支持 xxx.xxx 嵌套类型 */
+  /** label 字段 支持 xxx.xxx 嵌套类型 */
   labelField?: string;
 }
 
@@ -59,13 +50,17 @@ export interface RemoteSelectRef {}
 const DEFAULT_SEARCHPARAMS: SearchParams = {
   pageNum: 1,
   pageSize: 10,
-  fuzzyFields: ['name'],
 };
+
+/* 生成Options */
+const genOptions = (item: any) => ({ label: item.label, value: item.value });
 
 /**
  * 远程下拉组件
  * 由于下拉数据需要走请求，导致回显存在异常情况，默认采用 labelInValue 模式
  * 除 'options' | 'loading' | 'onSelect' | 'labelInValue' 字段，支持原生 antd Select 所有属性
+ * @example
+ * <RemoteSelect api={api}/>
  */
 const RemoteSelect: React.ForwardRefRenderFunction<RemoteSelectRef, RemoteSelectProps> = (
   props,
@@ -80,7 +75,7 @@ const RemoteSelect: React.ForwardRefRenderFunction<RemoteSelectRef, RemoteSelect
     ...selectProps
   } = props;
 
-  const { value, showSearch } = selectProps;
+  const { value, showSearch, mode } = selectProps;
 
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<SelectProps['options']>(defaultOptions);
@@ -94,9 +89,6 @@ const RemoteSelect: React.ForwardRefRenderFunction<RemoteSelectRef, RemoteSelect
     if (!extraOptions.length) return options;
     return uniqBy([...extraOptions, ...options], 'value');
   }, [options, extraOptions]);
-
-  // console.log('extraOptions :>> ', extraOptions);
-  // console.log('optionsUniq :>> ', optionsUniq);
 
   /* api-params */
   const params = useRef({ ...DEFAULT_SEARCHPARAMS });
@@ -157,12 +149,18 @@ const RemoteSelect: React.ForwardRefRenderFunction<RemoteSelectRef, RemoteSelect
       return;
     }
 
-    /* 空数据 */
-    if (!value || !value?.value) return;
-
-    /* 额外 Option */
-    setExtraOptions([{ value: value.value, label: value.label }]);
-  }, [value?.value]);
+    if (mode === 'multiple') {
+      /* 多选模式下，没有值时，不重置 */
+      if (!value || !value.length) return;
+      /* 额外 Option */
+      setExtraOptions(value.map(genOptions));
+    } else {
+      /* 空数据 */
+      if (!value || !value?.value) return;
+      /* 额外 Option */
+      setExtraOptions([{ value: value.value, label: value.label }]);
+    }
+  }, [value]);
 
   return (
     <Select
