@@ -1,4 +1,6 @@
-```TypeScript
+# useEffect 竟态锁
+
+```tsx
 import { useState, useEffect } from 'react';
 import { fetchBio } from './api.js';
 
