@@ -216,3 +216,146 @@ react 中最多有两个 fiber 树：
 在 dom 发生变化时，通过交替这两颗树，达到快速更新的效果。
 
 在次过程中 react 会尽可能的复用之前的 fiber 节点「复不复用取决于 diff 算法」，来减小开销。
+
+# render 阶段
+
+render阶段开始于performSyncWorkOnRoot或performConcurrentWorkOnRoot方法的调用。
+
+这取决于本次更新是同步更新还是异步更新。
+
+```js
+// performSyncWorkOnRoot会调用该方法
+function workLoopSync() {
+  while (workInProgress !== null) {
+    performUnitOfWork(workInProgress);
+  }
+}
+
+// performConcurrentWorkOnRoot会调用该方法
+function workLoopConcurrent() {
+  while (workInProgress !== null && !shouldYield()) {
+    performUnitOfWork(workInProgress);
+  }
+}
+```
+
+workLoopSync、workLoopConcurrent 也就是在做深度递归。
+
+递归的过程中会分别调用 beginWork 和 completeWork。
+
+## 递
+
+从 rootFiber 开始深度递归，遍历到的每一个 fiber 会调用 **beginWork** 方法。
+
+该方法会根据传入的 Fiber 节点创建子 Fiber 节点，并将这两个 Fiber 节点连接起来。
+
+当遍历到叶子节点（即没有子组件的组件）时就会进入“归”阶段。
+
+## 归
+
+在“归”阶段会调用 completeWork 处理 Fiber 节点。
+
+当某个 Fiber 节点执行完 completeWork，如果其存在**兄弟 Fiber 节点**（即fiber.sibling !== null），会进入其兄弟 Fiber 的“递”阶段。
+
+如果不存在兄弟 Fiber，会进入父级 Fiber 的“归”阶段。
+
+“递”和“归”阶段会交错执行直到“归”到 rootFiber。至此，render 阶段的工作就结束了。
+
+## 栗子
+
+```jsx
+function App() {
+  return (
+    <div>
+      i am
+      <span>KaSong</span>
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById("root"));
+```
+
+render 过程：
+
+![alt text](assets/image-13.png)
+
+```md
+1. rootFiber beginWork
+2. App Fiber beginWork
+3. div Fiber beginWork
+4. "i am" Fiber beginWork
+5. "i am" Fiber completeWork
+6. span Fiber beginWork
+7. span Fiber completeWork
+8. div Fiber completeWork
+9. App Fiber completeWork
+10. rootFiber completeWork
+```
+
+## beginWork
+
+主要工作：根据当前 fiber 节点，创建 `子fiber` 节点。
+
+```js
+function beginWork(
+  current: Fiber | null,
+  workInProgress: Fiber,
+  renderLanes: Lanes
+): Fiber | null {
+  if (current !== null) {
+    /* update 更新 */
+    /* update时：如果current存在可能存在优化路径，可以复用current（即上一次更新的Fiber节点） */
+    // ...省略
+
+    // 复用current
+    return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
+  } else {
+    /* mount 首次挂载 */
+    didReceiveUpdate = false;
+  }
+
+  /* mount时：根据tag不同，创建不同的子Fiber节点 */
+  switch (workInProgress.tag) {
+    case IndeterminateComponent:
+    // ...省略
+    case LazyComponent:
+    // ...省略
+    case FunctionComponent:
+    // ...省略
+    case ClassComponent:
+    // ...省略
+    case HostRoot:
+    // ...省略
+    case HostComponent:
+    // ...省略
+    case HostText:
+    // ...省略
+    // ...省略其他类型
+  }
+}
+```
+
+常见的 FunctionComponent、ClassComponent 都会执行 reconcileChildren 函数，也就是 Reconciler 的核心，主要做：
+
+1. mount 组件：创建子fiber节点
+2. update 组件：fiber 进行比对后生成新的 fiber - 「Diff」
+
+
+不同的是，在 update 返回的 fiber 中会多一个 effectTag 属性。
+
+effectTag 属性是交给 Renderer 阶段对于 Dom 的具体操作标志，是一个二进制串。
+
+[all-effectTag-flag](https://github.com/facebook/react/blob/1fb18e22ae66fdb1dc127347e169e73948778e5a/packages/react-reconciler/src/ReactSideEffectTags.js)
+
+> 至于为什么是二进制？
+>
+> 二进制可以通过 | 运算，存储多个 effect
+>
+> fiber.effectTag = Placement | Update;
+
+begin 流程图：
+
+![alt text](assets/image-14.png)
+
+## completeWork
