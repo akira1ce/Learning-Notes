@@ -359,3 +359,13 @@ begin 流程图：
 ![alt text](assets/image-14.png)
 
 ## completeWork
+
+负责应用渲染结果，执行副作用并将更新反映到 DOM 中。
+
+一旦 beginWork 阶段完成后，completeWork 阶段开始执行，这个阶段主要负责提交工作，意味着它会处理 Fiber 树的更新，并决定实际的 DOM 变更。
+
+在 completeWork 阶段，React 会将渲染的结果应用到浏览器的 DOM 上，执行相关的副作用（如生命周期方法的调用、效果的执行等）。如果某个组件需要更新其 DOM，React 会计算出这些变更，并将其应用到页面中。
+
+这个阶段还会进行一些优化，例如通过 commit 阶段来批量更新 DOM 以提高性能。
+
+![alt text](https://react.iamkasong.com/img/completeWork.png)
